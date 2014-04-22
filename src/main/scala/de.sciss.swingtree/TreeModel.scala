@@ -1,16 +1,14 @@
-package scalaswingcontrib
-package tree
+package de.sciss.swingtree
 
 import Tree.Path
 import javax.swing.{tree => jst}
 
 object TreeModel {
-  
-  /**
-   * This value is the root node of every TreeModel's underlying javax.swing.tree.TreeModel.  As we wish to support multiple root 
-   * nodes in a typesafe manner, we need to maintain a permanently hidden dummy root to hang the user's "root" nodes off.
-   */
-  private[tree] case object hiddenRoot
+
+  /** This value is the root node of every TreeModel's underlying javax.swing.tree.TreeModel.  As we wish to support multiple root
+    * nodes in a type-safe manner, we need to maintain a permanently hidden dummy root to hang the user's "root" nodes off.
+    */
+  private[swingtree] case object hiddenRoot
   
   def empty[A]: TreeModel[A] = new ExternalTreeModel[A](Seq.empty, _ => Seq.empty)
   def apply[A](roots: A*)(children: A => Seq[A]): TreeModel[A] = new ExternalTreeModel(roots, children)
@@ -25,18 +23,17 @@ trait TreeModel[A] {
   def getChildPathsOf(parentPath: Path[A]): Seq[Path[A]] = getChildrenOf(parentPath).map(parentPath :+ _)
   def filter(p: A => Boolean): TreeModel[A]
   def map[B](f: A => B): TreeModel[B]
-  def foreach[U](f: A => U) { depthFirstIterator foreach f }
+  def foreach[U](f: A => U): Unit = depthFirstIterator foreach f
   def isExternalModel: Boolean
   def toInternalModel: InternalTreeModel[A]
   
   
   def pathToTreePath(path: Path[A]): jst.TreePath
   def treePathToPath(tp: jst.TreePath): Path[A]
- 
-  /**
-   * Replace the item at the given path in the tree with a new value. 
-   * Events are fired as appropriate.
-   */
+
+  /** Replace the item at the given path in the tree with a new value.
+    * Events are fired as appropriate.
+    */
   def update(path: Path[A], newValue: A): Unit
   def remove(pathToRemove: Path[A]): Boolean
   def insertUnder(parentPath: Path[A], newValue: A, index: Int): Boolean
@@ -59,12 +56,11 @@ trait TreeModel[A] {
   
   protected def siblingsUnder(parentPath: Path[A]) = if (parentPath.isEmpty) roots 
                                                      else getChildrenOf(parentPath)
-  
 
-  /**
-   * Iterates sequentially through each item in the tree, either in breadth-first or depth-first ordering, 
-   * as decided by the abstract pushChildren() method.
-   */
+
+  /** Iterates sequentially through each item in the tree, either in breadth-first or depth-first ordering,
+    * as decided by the abstract pushChildren() method.
+    */
   private trait TreeIterator extends Iterator[A] {
     protected var openNodes: Iterator[Path[A]] = roots.map(Path(_)).iterator
 
@@ -79,11 +75,12 @@ trait TreeModel[A] {
   }
   
   def breadthFirstIterator: Iterator[A] = new TreeIterator {
-    override def pushChildren(path: Path[A]) { openNodes ++= getChildPathsOf(path).toIterator }
+    override def pushChildren(path: Path[A]): Unit =
+      openNodes ++= getChildPathsOf(path).toIterator
   }
   
   def depthFirstIterator: Iterator[A] = new TreeIterator {
-    override def pushChildren(path: Path[A]) {
+    override def pushChildren(path: Path[A]): Unit = {
       val open = openNodes
       openNodes = getChildPathsOf(path).toIterator ++ open // ++'s argument is by-name, and should not directly pass in a var
     }

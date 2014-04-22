@@ -1,5 +1,4 @@
-package scalaswingcontrib
-package tree
+package de.sciss.swingtree
 
 import Tree.Path
 import scala.collection.mutable
@@ -11,9 +10,7 @@ object ExternalTreeModel {
     new ExternalTreeModel(roots, children)
 }
 
-/**
- * Represents tree data as a sequence of root nodes, and a function that can retrieve child nodes.  
- */
+/** Represents tree data as a sequence of root nodes, and a function that can retrieve child nodes. */
 class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends TreeModel[A] {
   self =>
   
@@ -43,40 +40,36 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
   def treePathToPath(tp: jst.TreePath): Path[A] = {
     if (tp == null) null 
     else tp.getPath.map(_.asInstanceOf[A]).tail.toIndexedSeq
-  } 
-  
-  /** 
-   * A function to update a value in the model, at a given path.  By default this will throw an exception; to 
-   * make a TreeModel updatable, call makeUpdatable() to provide a new TreeModel with the specified update method.
-   */
-  protected[tree] val updateFunc: (Path[A], A) => A = {
+  }
+
+  /** A function to update a value in the model, at a given path.  By default this will throw an exception; to
+    * make a TreeModel updatable, call makeUpdatable() to provide a new TreeModel with the specified update method.
+    */
+  protected[swingtree] val updateFunc: (Path[A], A) => A = {
     (_,_) => throw new UnsupportedOperationException("Update is not supported on this tree")
   }
-  
-  /** 
-   * A function to insert a value in the model at a given path, returning whether the operation succeeded.  
-   * By default this will throw an exception; to allow insertion on a TreeModel, 
-   * call insertableWith() to provide a new TreeModel with the specified insert method.
-   */
-  protected[tree] val insertFunc: (Path[A], A, Int) => Boolean = {
+
+  /** A function to insert a value in the model at a given path, returning whether the operation succeeded.
+    * By default this will throw an exception; to allow insertion on a TreeModel,
+    * call insertableWith() to provide a new TreeModel with the specified insert method.
+    */
+  protected[swingtree] val insertFunc: (Path[A], A, Int) => Boolean = {
     (_,_,_) => throw new UnsupportedOperationException("Insert is not supported on this tree")
   }
 
-  /** 
-   * A function to remove a item in the model at a given path, returning whether the operation succeeded.  
-   * By default this will throw an exception; to allow removal from a TreeModel, 
-   * call removableWith() to provide a new TreeModel with the specified remove method.
-   */
-  protected[tree] val removeFunc: Path[A] => Boolean = {
+  /** A function to remove a item in the model at a given path, returning whether the operation succeeded.
+    * By default this will throw an exception; to allow removal from a TreeModel,
+    * call removableWith() to provide a new TreeModel with the specified remove method.
+    */
+  protected[swingtree] val removeFunc: Path[A] => Boolean = {
     _ => throw new UnsupportedOperationException("Removal is not supported on this tree")
   }
-  
-  /**
-   * Returns a new VirtualTreeModel that knows how to modify the underlying representation, 
-   * using the given function to replace one value with another.   
-   * <p>
-   * Calling update() on a model returned from makeUpdatable() will perform the update.
-   */
+
+  /** Returns a new VirtualTreeModel that knows how to modify the underlying representation,
+    * using the given function to replace one value with another.
+    * <p>
+    * Calling update() on a model returned from makeUpdatable() will perform the update.
+    */
   def makeUpdatableWith(effectfulUpdate: (Path[A], A) => A): ExternalTreeModel[A] = new ExternalTreeModel(roots, children) {
     override val updateFunc = effectfulUpdate
     override val insertFunc = self.insertFunc
@@ -97,13 +90,12 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
     override val removeFunc = effectfulRemove
     this.peer copyListenersFrom self.peer
   }
-  
-  /**
-   * Replaces one value with another, mutating the underlying structure.  
-   * If a way to modify the external tree structure has not been provided with makeUpdatableWith(), then
-   * an exception will be thrown.
-   */
-  def update(path: Path[A], newValue: A) {
+
+  /** Replaces one value with another, mutating the underlying structure.
+    * If a way to modify the external tree structure has not been provided with makeUpdatableWith(), then
+    * an exception will be thrown.
+    */
+  def update(path: Path[A], newValue: A): Unit = {
     if (path.isEmpty) throw new IllegalArgumentException("Cannot update an empty path")
     
     val existing = path.last
@@ -192,61 +184,50 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
     def isLeaf(node: Any): Boolean = getChildrenOf(node).isEmpty
     
     
-    private[tree] def copyListenersFrom(otherPeer: ExternalTreeModel[A]#ExternalTreeModelPeer) {
+    private[swingtree] def copyListenersFrom(otherPeer: ExternalTreeModel[A]#ExternalTreeModelPeer): Unit =
       otherPeer.treeModelListeners foreach addTreeModelListener
-    }
-    
+
     def treeModelListeners: Seq[jse.TreeModelListener] = treeModelListenerList
     
-    def addTreeModelListener(tml: jse.TreeModelListener) {
+    def addTreeModelListener(tml: jse.TreeModelListener): Unit =
       treeModelListenerList += tml
-    }
-    
-    def removeTreeModelListener(tml: jse.TreeModelListener) {
+
+    def removeTreeModelListener(tml: jse.TreeModelListener): Unit  =
       treeModelListenerList -= tml
-    }
-    
-    def valueForPathChanged(path: jst.TreePath, newValue: Any) {
+
+    def valueForPathChanged(path: jst.TreePath, newValue: Any): Unit =
       update(treePathToPath(path), newValue.asInstanceOf[A])
-    }
-    
-    private def createEvent(parentPath: jst.TreePath, newValue: Any) = {
+
+    private def createEvent(parentPath: jst.TreePath, newValue: Any): jse.TreeModelEvent = {
       val index = getChildrenOf(parentPath.getPath.last) indexOf newValue
       createEventWithIndex(parentPath, newValue, index)
     }
   
-    private def createEventWithIndex(parentPath: jst.TreePath, newValue: Any, index: Int) = {
+    private def createEventWithIndex(parentPath: jst.TreePath, newValue: Any, index: Int): jse.TreeModelEvent = {
       new jse.TreeModelEvent(this, parentPath, Array(index), Array(newValue.asInstanceOf[AnyRef]))
     }
     
-    def fireTreeStructureChanged(parentPath: jst.TreePath, newValue: Any) {
+    def fireTreeStructureChanged(parentPath: jst.TreePath, newValue: Any): Unit =
       treeModelListenerList foreach { _ treeStructureChanged createEvent(parentPath, newValue) }
-    }
-    
-    def fireNodesChanged(parentPath: jst.TreePath, newValue: Any) {
+
+    def fireNodesChanged(parentPath: jst.TreePath, newValue: Any): Unit =
       treeModelListenerList foreach { _ treeNodesChanged createEvent(parentPath, newValue) }
-    }
-    
-    def fireNodesInserted(parentPath: jst.TreePath, newValue: Any, index: Int) {
+
+    def fireNodesInserted(parentPath: jst.TreePath, newValue: Any, index: Int): Unit = {
       def createEvent = createEventWithIndex(parentPath, newValue, index)
       treeModelListenerList foreach { _ treeNodesInserted createEvent }
     }
     
-    def fireNodesRemoved(parentPath: jst.TreePath, removedValue: Any, index: Int) {
+    def fireNodesRemoved(parentPath: jst.TreePath, removedValue: Any, index: Int): Unit = {
       def createEvent = createEventWithIndex(parentPath, removedValue, index)
       treeModelListenerList foreach { _ treeNodesRemoved createEvent }
     }
   }
-  
-  
-  
-  /**
-   * Underlying tree model that exposes the tree structure to Java Swing.
-   *
-   * This implementation of javax.swing.tree.TreeModel takes advantage of its abstract nature, so that it respects 
-   * the tree shape of the underlying structure provided by the user.
-   */
-  lazy val peer = new ExternalTreeModelPeer
-   
-}
 
+  /** Underlying tree model that exposes the tree structure to Java Swing.
+    *
+    * This implementation of javax.swing.tree.TreeModel takes advantage of its abstract nature, so that it respects
+    * the tree shape of the underlying structure provided by the user.
+    */
+  lazy val peer = new ExternalTreeModelPeer
+}

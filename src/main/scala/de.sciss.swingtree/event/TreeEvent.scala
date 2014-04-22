@@ -1,10 +1,9 @@
-package scalaswingcontrib
+package de.sciss.swingtree
 package event
 
-import tree.Tree
 import swing.event.{SelectionEvent, ComponentEvent}
 
-/** The common trait of all events dispatched by a [[scalaswingcontrib.tree.Tree]]. */
+/** The common trait of all events dispatched by a [[de.sciss.swingtree.Tree]]. */
 sealed trait TreeEvent[A] extends ComponentEvent {
   val source: Tree[A]
 }
@@ -16,7 +15,7 @@ object TreeNodeSelected {
   }
 }
 
-/** The event denoting a change in selected paths of a [[scalaswingcontrib.tree.Tree]].
+/** The event denoting a change in selected paths of a [[de.sciss.swingtree.Tree]].
   *
   * The event provides information about which paths have been removed or added to the selection. For example,
   * if a tree contains three elements, A, B, C, and initially A was selected, then an additional selection of

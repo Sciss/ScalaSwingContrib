@@ -1,12 +1,10 @@
-package scalaswingcontrib
-package test
+package de.sciss.swingtree
 
-import scala.xml.{Node, XML}
+import scala.xml.XML
 import scala.swing.{Button, Label, SimpleSwingApplication, Dimension, Component,
                     Action, GridPanel, MainFrame, TabbedPane, BorderPanel, ScrollPane, Swing}
 import Swing.{Icon, pair2Dimension}
-import scalaswingcontrib.tree.{Tree, TreeModel, InternalTreeModel, ExternalTreeModel}
-import scalaswingcontrib.event.TreeNodeSelected
+import event.TreeNodeSelected
 import scala.collection.mutable
 import Tree.{Renderer, Editor}
 
@@ -17,7 +15,7 @@ object TreeDemo extends SimpleSwingApplication {
   import ExampleData._
       
   // Use case 1: Show an XML document
-  lazy val xmlTree = new Tree[Node] {
+  lazy val xmlTree = new Tree[xml.Node] {
     model = TreeModel(xmlDoc)(_.child filterNot (_.text.trim.isEmpty))
     renderer = Renderer(n => 
         if (n.label startsWith "#") n.text.trim 
@@ -67,8 +65,14 @@ object TreeDemo extends SimpleSwingApplication {
   lazy val infiniteTree = new Tree(TreeModel(1000) {n => 1 to n filter (n % _ == 0)}) {
     expandRow(0)
   }
-  
-  
+
+  val externalTreeStatusBar = new Label {
+    preferredSize = (100,12)
+  }
+
+  val internalTreeStatusBar = new Label {
+    preferredSize = (100,12)
+  }
   
   // Use case 5: Mutable external tree model
   val mutableExternalTree = new Tree[PretendFile] {
@@ -180,18 +184,8 @@ object TreeDemo extends SimpleSwingApplication {
     contents += removeButton
   }
 
-  
-  val externalTreeStatusBar = new Label {
-    preferredSize = (100,12)
-  }
-  
-  val internalTreeStatusBar = new Label {
-    preferredSize = (100,12)
-  }
-  
   // Other setup stuff
-  
-   
+
   def top = new MainFrame {
     title = "Scala Swing Tree Demo"
   
@@ -224,11 +218,12 @@ object TreeDemo extends SimpleSwingApplication {
   }
 
   object ExampleData {
+    val rsrc = "test"
     
     // File system icons
-    def getIconUrl(path: String) = resourceFromClassloader(path) ensuring (_ != null, "Couldn't find icon " + path)
-    val fileIcon = Icon(getIconUrl("/scalaswingcontrib/test/images/file.png"))
-    val folderIcon = Icon(getIconUrl("/scalaswingcontrib/test/images/folder.png"))
+    def getIconUrl(path: String) = resourceFromClassloader(path) ensuring (_ != null, s"Couldn't find icon $path")
+    val fileIcon   = Icon(getIconUrl(s"$rsrc/images/file.png"))
+    val folderIcon = Icon(getIconUrl(s"$rsrc/images/folder.png"))
     
     // Contrived class hierarchy
     case class Customer(id: Int, title: String, firstName: String, lastName: String)
@@ -250,7 +245,7 @@ object TreeDemo extends SimpleSwingApplication {
       Order(3, bob, boxOfNails, 44),
       Order(4, susan, nailGun, 1))
       
-    lazy val xmlDoc: Node = try {XML load resourceFromClassloader("/scalaswingcontrib/test/sample.xml")}
+    lazy val xmlDoc: xml.Node = try {XML load resourceFromClassloader(s"$rsrc/sample.xml")}
                             catch {case _: IOException => <error> Error reading XML file. </error>}
                             
                     
@@ -260,7 +255,7 @@ object TreeDemo extends SimpleSwingApplication {
       childFiles foreach {_.parent = Some(this)}
       private var childBuffer = mutable.ListBuffer(childFiles: _*)
       
-      override def toString() = name
+      override def toString = name
       def name = nameVar
       def rename(str: String): Boolean = if (siblingExists(str)) false 
                                          else { nameVar = str; true }
@@ -274,14 +269,14 @@ object TreeDemo extends SimpleSwingApplication {
           true 
         }
       }
-      def delete(): Boolean = parent.map(_ removeChild this) getOrElse false
+      def delete(): Boolean = parent.exists(_ removeChild this)
       def removeChild(child: PretendFile): Boolean = if (children contains child) {childBuffer -= child; true}
                                                      else false
                                                      
-      def siblingExists(siblingName: String) = parent.map(_ childExists siblingName) getOrElse false
-      def childExists(childName: String) = children.exists(_.name == childName)
+      def siblingExists(siblingName: String): Boolean = parent.exists(_ childExists siblingName)
+      def childExists(childName: String): Boolean = children.exists(_.name == childName)
       def children: Seq[PretendFile] = childBuffer
-      def isDirectory = children.nonEmpty
+      def isDirectory: Boolean = children.nonEmpty
     }
     
     val pretendFileSystem = PretendFile("~", 

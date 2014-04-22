@@ -1,11 +1,10 @@
-package scalaswingcontrib
+package de.sciss.swingtree
 
 import scala.swing.Publisher
 
-/**
-* Common superclass of cell editors.
-* @author Ken Scambler
-*/
+/** Common superclass of cell editors.
+  * @author Ken Scambler
+  */
 trait CellEditor[+A] extends Publisher {
   def peer: AnyRef
   def value: A

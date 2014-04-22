@@ -1,57 +1,65 @@
-name := "ScalaSwingContrib"
+name               := "ScalaSwingTree"
 
-organization := "com.github.benhutchison"
+organization       := "de.sciss"
 
-version := "1.5"
+moduleName         := "scala-swing-tree"
 
-scalaVersion := "2.10.1"
+version            := "0.1.0"
 
-libraryDependencies <+= scalaVersion { sv => "org.scala-lang" % "scala-swing" % sv }
+scalaVersion       := "2.11.0"
 
-libraryDependencies ++= Seq(
-  "org.specs2" %% "specs2" % "1.13" % "test",
-  "junit" % "junit" % "4.7" % "test"
-)
+crossScalaVersions := Seq("2.11.0", "2.10.4")
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature")
+licenses           := Seq("LGPL v3+" -> url("http://www.gnu.org/licenses/lgpl-3.0.txt"))
 
-crossPaths := false
+homepage           := Some(url("https://github.com/Sciss/" + name.value))
 
-// Following settings taken from: 
-//https://github.com/sbt/sbt.github.com/blob/gen-master/src/jekyll/using_sonatype.md
+description        := "A Scala Swing wrapper for the JTree component"
+
+libraryDependencies ++= {
+  val sv = scalaVersion.value
+  val is210 = sv.startsWith("2.10")
+  val swing = if (is210) {
+    "org.scala-lang"         %  "scala-swing" % sv
+  } else {
+    "org.scala-lang.modules" %% "scala-swing" % "1.0.1"
+  }
+  val sq0 = swing :: Nil
+  //
+  if (is210) sq0 else {
+    val xml = "org.scala-lang.modules" %% "scala-xml" % "1.0.1" % "test"
+    xml :: sq0
+  }
+}
+
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Xfuture")
+
+// ---- publishing ----
 
 publishMavenStyle := true
 
-
-publishTo <<= version { (v: String) =>
-  val nexus = "https://oss.sonatype.org/"
-  if (v.trim.endsWith("SNAPSHOT")) 
-    Some("snapshots" at nexus + "content/repositories/snapshots") 
+publishTo :=
+  Some(if (version.value endsWith "-SNAPSHOT")
+    "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
   else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-}
-
-//for local testing
-//publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
+    "Sonatype Releases"  at "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+  )
 
 publishArtifact in Test := false
 
 pomIncludeRepository := { _ => false }
 
-pomExtra := (
-  <url>http://github.com/benhutchison/ScalaSwingContrib</url>
-  <licenses>
-    <license>
-      <name>BSD-style</name>
-      <url>http://www.opensource.org/licenses/bsd-license.php</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
+pomExtra := { val n = name.value
   <scm>
-    <url>git@github.com:benhutchison/ScalaSwingContrib.git</url>
-    <connection>scm:git:git@github.com:benhutchison/ScalaSwingContrib.git</connection>
+    <url>git@github.com:Sciss/{n}.git</url>
+    <connection>scm:git:git@github.com:Sciss/{n}.git</connection>
   </scm>
   <developers>
+    <developer>
+      <id>sciss</id>
+      <name>Hanns Holger Rutz</name>
+      <url>http://www.sciss.de</url>
+    </developer>
     <developer>
       <id>benhutchison</id>
       <name>Ben Hutchison</name>
@@ -62,5 +70,6 @@ pomExtra := (
       <name>Ken Scambler</name>
       <url>http://github.com:kenbot</url>
     </developer>
-  </developers>)
-  
+  </developers>
+}
+

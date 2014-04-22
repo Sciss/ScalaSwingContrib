@@ -1,5 +1,4 @@
-package scalaswingcontrib
-package tree
+package de.sciss.swingtree
 
 import javax.swing.{tree => jst}
 import Tree.Path
@@ -25,8 +24,8 @@ object InternalTreeModel {
     new InternalTreeModel(new PeerModel(rootNode))
   }
   
-  private[tree] type PeerModel = jst.DefaultTreeModel
-  private[tree] type PeerNode  = jst.DefaultMutableTreeNode
+  private[swingtree] type PeerModel = jst.DefaultTreeModel
+  private[swingtree] type PeerNode  = jst.DefaultMutableTreeNode
 }
 
 
@@ -56,9 +55,8 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
 
   def roots: Seq[A] = getNodeChildren(rootPeerNode) map unpackNode
   
-  def update(path: Path[A], newValue: A) {
+  def update(path: Path[A], newValue: A): Unit =
     peer.valueForPathChanged(pathToTreePath(path), newValue)
-  }
 
   private def getPeerNodeAt(path: Path[A]): PeerNode = {
     pathToTreePath(path).getLastPathComponent.asInstanceOf[PeerNode]
@@ -78,7 +76,7 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
     override val peer = copyFromModel(self, f)
   }
 
-  protected[tree] def copyFromModel[B](otherModel: TreeModel[B], f: B => A): jst.DefaultTreeModel = {
+  protected[swingtree] def copyFromModel[B](otherModel: TreeModel[B], f: B => A): jst.DefaultTreeModel = {
     def copyNodeAt(bPath: Path[B]): PeerNode = {
       val copiedNode     = new PeerNode(f(bPath.last))
       val otherChildren  = otherModel.getChildrenOf(bPath)

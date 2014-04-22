@@ -1,29 +1,25 @@
-package scalaswingcontrib
+package de.sciss.swingtree
 
 import scala.swing.{Label, Component, Publisher}
 import javax.{swing => js}
 import scala.language.higherKinds
 
-/**
-* Describes the structure of a component's companion object where pluggable cell renderers must be supported.
-* @author Ken Scambler
-*/
+/** Describes the structure of a component's companion object where pluggable cell renderers must be supported.
+  * @author Ken Scambler
+  */
 trait RenderableCellsCompanion {
   type Renderer[-A] <: CellRenderer[A]
   protected type Owner <: Component with CellView[_]
   
   val Renderer: CellRendererCompanion
-  
-  /**
-  * A generic renderer that uses Swing's built-in renderers. If there is no 
-  * specific renderer for a type, this renderer falls back to a renderer 
-  * that renders the string returned from an item's <code>toString</code>.
-  */
+
+  /** A generic renderer that uses Swing's built-in renderers. If there is no
+    * specific renderer for a type, this renderer falls back to a renderer
+    * that renders the string returned from an item's <code>toString</code>.
+    */
   implicit val GenericRenderer: Renderer[Any] = Renderer.default
 
-  /**
-  * A default renderer implementation based on a Label.  
-  */
+  /** A default renderer implementation based on a Label. */
   type DefaultRenderer[-A] <: Label with Renderer[A]
   
   
@@ -37,9 +33,7 @@ trait RenderableCellsCompanion {
 
     def default[A]: DefaultRenderer[A]
     
-    /**
-    * Convenient default display of a cell node, which provides an Icon and label text for each item.
-    */
+    /** Convenient default display of a cell node, which provides an Icon and label text for each item. */
     def labeled[A](f: A => (js.Icon, String)): DefaultRenderer[A]
     
     protected trait LabelRenderer[-A] extends CellRenderer[A] {

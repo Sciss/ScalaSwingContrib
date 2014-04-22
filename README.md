@@ -1,33 +1,17 @@
-ScalaSwingContrib
-=================
+# ScalaSwingTree
 
-A collection of community-contributed extensions to Scala Swing, including
+A Tree component for Scala Swing. The original work was done by Ken Scambler and had subsequently been merged into the [ScalaSwingContrib](https://github.com/benhutchison/ScalaSwingContrib) project. This is a fork from ScalaSwingContrib that only retains the `Tree` class, making it again available as a standalone component, and serving as a base for future improvements. The original code was released under a BSD style license.
 
-* A Tree and TreeModel for wrapping JTree, contributed by Ken Scambler & Sciss
-* A GroupPanel to display items using javax.swing.GroupLayout, contributed by Andreas Flierl
-* A PopupMenu wrapper contributed by https://github.com/sullivan-
-* A ColorChooser contributed by Andy Hicks
-* RichColor enriches java.awt.Color with methods to move around in color space, contributed by Ben Hutchison
-* AbsoluteLayoutPanel supports absolute layouts (Swing's null LayoutManager) in ScalaSwing, contributed by Ben Hutchison and Ken Scambler
-* RichFont enriches java.awt.Font
+All modifications (C)opyright 2014 by Hanns Holger Rutz. New project released under the GNU LGPL v3+.
 
-All classes reside in the scalaswingcontrib package namespace.
+## linking
 
-Jars can be downloaded manually from the distributions directory.
+To use the library:
 
-ScalaSwingContrib is derived from [https://github.com/kenbot/scala-swing] and [https://github.com/ingoem/scala-swing/pulls], 
-and is maintained by Ben Hutchison and Ken Scambler.
+    "de.sciss" %% "scala-swing-tree"  % v
 
-ScalaSwingContrib is built with SBT: sbt package
+The current version `v` is `"0.1.+"`
 
-Maven details
+## building
 
-* Group Id:  com.github.benhutchison
-* Aftifact Id: ScalaSwingContrib
-* Version: 1.5
-
-Version 1.4+ is built with Scala 2.10.1. 1.3 is built with Scala 2.9.2.
-
-Bug reports and pull requests welcome. 
-
-Be aware that ScalaSwingContrib is intended to be strictly an /extension/, not a /modification/ to ScalaSwing, so changes to existing ScalaSwing APIs should be submitted to the core Scala team.
+This project compiles against Scala 2.11, 2.10 and sbt 0.13.
