@@ -4,13 +4,13 @@ organization       := "de.sciss"
 
 moduleName         := "scala-swing-tree"
 
-version            := "0.1.0"
+version            := "0.1.1"
 
 scalaVersion       := "2.11.0"
 
 crossScalaVersions := Seq("2.11.0", "2.10.4")
 
-licenses           := Seq("LGPL v3+" -> url("http://www.gnu.org/licenses/lgpl-3.0.txt"))
+licenses           := Seq("LGPL v2.1+" -> url("http://www.gnu.org/licenses/lgpl-2.1.txt"))
 
 homepage           := Some(url("https://github.com/Sciss/" + name.value))
 
@@ -61,14 +61,9 @@ pomExtra := { val n = name.value
       <url>http://www.sciss.de</url>
     </developer>
     <developer>
-      <id>benhutchison</id>
-      <name>Ben Hutchison</name>
-      <url>http://github.com:benhutchison</url>
-    </developer>
-    <developer>
       <id>kenbot</id>
       <name>Ken Scambler</name>
-      <url>http://github.com:kenbot</url>
+      <url>http://github.com/kenbot</url>
     </developer>
   </developers>
 }
