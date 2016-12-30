@@ -1,7 +1,8 @@
 package de.sciss.swingtree
 
-import Tree.Path
 import javax.swing.{tree => jst}
+
+import de.sciss.swingtree.Tree.Path
 
 object TreeModel {
 
@@ -53,9 +54,10 @@ trait TreeModel[A] {
     val index = siblingsUnder(parentPath) indexOf path.last
     insertUnder(parentPath, newValue, index + 1)
   }
-  
-  protected def siblingsUnder(parentPath: Path[A]) = if (parentPath.isEmpty) roots 
-                                                     else getChildrenOf(parentPath)
+
+  protected def siblingsUnder(parentPath: Path[A]): Seq[A] =
+    if (parentPath.isEmpty) roots
+    else getChildrenOf(parentPath)
 
 
   /** Iterates sequentially through each item in the tree, either in breadth-first or depth-first ordering,
@@ -65,8 +67,8 @@ trait TreeModel[A] {
     protected var openNodes: Iterator[Path[A]] = roots.map(Path(_)).iterator
 
     def pushChildren(path: Path[A]): Unit
-    def hasNext = openNodes.nonEmpty
-    def next() = if (openNodes.hasNext) {
+    def hasNext: Boolean = openNodes.nonEmpty
+    def next(): A = if (openNodes.hasNext) {
       val path = openNodes.next()
       pushChildren(path)
       path.last

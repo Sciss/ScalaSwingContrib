@@ -73,7 +73,7 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
   }
   
   def map[B](f: A => B): InternalTreeModel[B] = new InternalTreeModel[B] {
-    override val peer = copyFromModel(self, f)
+    override val peer: PeerModel = copyFromModel(self, f)
   }
 
   protected[swingtree] def copyFromModel[B](otherModel: TreeModel[B], f: B => A): jst.DefaultTreeModel = {

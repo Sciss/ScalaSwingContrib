@@ -1,45 +1,48 @@
-name               := "ScalaSwingTree"
+lazy val baseName  = "ScalaSwingTree"
+lazy val baseNameL = "scala-swing-tree"
 
+lazy val projectVersion = "0.1.2"
+lazy val mimaVersion    = "0.1.0"
+
+name               := baseName
 organization       := "de.sciss"
-
-moduleName         := "scala-swing-tree"
-
-version            := "0.1.1"
-
-scalaVersion       := "2.11.0"
-
-crossScalaVersions := Seq("2.11.0", "2.10.4")
-
+moduleName         := baseNameL
+version            := projectVersion
+scalaVersion       := "2.11.8"
+crossScalaVersions := Seq("2.12.1", "2.11.8", "2.10.6")
 licenses           := Seq("LGPL v2.1+" -> url("http://www.gnu.org/licenses/lgpl-2.1.txt"))
-
-homepage           := Some(url("https://github.com/Sciss/" + name.value))
-
+homepage           := Some(url(s"https://github.com/Sciss/${name.value}"))
 description        := "A Scala Swing wrapper for the JTree component"
+
+mimaPreviousArtifacts := Set("de.sciss" %% baseNameL % mimaVersion)
+
+// ---- main dependencies ----
+
+lazy val swingPlusVersion = "0.2.2"
+
+// ---- test dependencies ----
+
+lazy val xmlVersion       = "1.0.6"
+
+libraryDependencies += "de.sciss" %% "swingplus" % swingPlusVersion
 
 libraryDependencies ++= {
   val sv = scalaVersion.value
   val is210 = sv.startsWith("2.10")
-  val swing = if (is210) {
-    "org.scala-lang"         %  "scala-swing" % sv
-  } else {
-    "org.scala-lang.modules" %% "scala-swing" % "1.0.1"
-  }
-  val sq0 = swing :: Nil
-  //
-  if (is210) sq0 else {
-    val xml = "org.scala-lang.modules" %% "scala-xml" % "1.0.1" % "test"
-    xml :: sq0
+  if (is210) Nil else {
+    val xml = "org.scala-lang.modules" %% "scala-xml" % xmlVersion % "test"
+    xml :: Nil
   }
 }
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Xfuture")
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Xfuture", "-encoding", "utf8", "-Xlint")
 
 // ---- publishing ----
 
 publishMavenStyle := true
 
 publishTo :=
-  Some(if (version.value endsWith "-SNAPSHOT")
+  Some(if (isSnapshot.value)
     "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
   else
     "Sonatype Releases"  at "https://oss.sonatype.org/service/local/staging/deploy/maven2"

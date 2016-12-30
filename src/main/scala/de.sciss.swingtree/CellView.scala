@@ -27,10 +27,10 @@ trait CellView[+A] {
       def +=(s: S): this.type
       def --=(ss: Seq[S]): this.type 
       def ++=(ss: Seq[S]): this.type
-      override def size = nonNullOrEmpty(a).length
-      def contains(s: S) = nonNullOrEmpty(a) contains s
-      def iterator = nonNullOrEmpty(a).iterator
-      protected def nonNullOrEmpty[A1](s: Seq[A1]) = if (s != null) s else Seq.empty
+      override def size: Int = nonNullOrEmpty(a).length
+      def contains(s: S): Boolean = nonNullOrEmpty(a) contains s
+      def iterator: Iterator[S] = nonNullOrEmpty(a).iterator
+      protected def nonNullOrEmpty[A1](s: Seq[A1]): Seq[A1] = if (s != null) s else Seq.empty
     }
     
     /** Returns an iterator that traverses the currently selected cell values. */
