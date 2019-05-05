@@ -1,11 +1,12 @@
 package de.sciss.swingtree
 
-import scala.swing.{Component, Publisher}
-import event.{CellEditingCancelled, CellEditingStopped}
-import javax.{swing => js}
-import javax.swing.{event => jse}
-import scala.language.higherKinds
 import de.sciss.swingtree
+import de.sciss.swingtree.event.{CellEditingCancelled, CellEditingStopped}
+import javax.swing.{event => jse}
+import javax.{swing => js}
+
+import scala.language.higherKinds
+import scala.swing.{Component, Publisher}
 
 /** Describes the structure of a component's companion object where pluggable cell editors must be supported.
   * @author Ken Scambler
@@ -19,7 +20,6 @@ trait EditableCellsCompanion {
 
   trait CellEditorCompanion {
     type Peer <: js.CellEditor
-    type CellInfo
     val emptyCellInfo: CellInfo
     def wrap[A](e: Peer): Editor[A]
     def apply[A, B: Editor](toB: A => B, toA: B => A): Editor[A]
@@ -27,6 +27,7 @@ trait EditableCellsCompanion {
   
   trait CellEditor[A] extends Publisher with swingtree.CellEditor[A] {
     val companion: CellEditorCompanion
+
     def peer: companion.Peer
 
     protected def fireCellEditingCancelled(): Unit = publish(CellEditingCancelled[A](this))
@@ -43,7 +44,7 @@ trait EditableCellsCompanion {
       listenToPeer(this)
     }
 
-    def componentFor(owner: Owner, value: A, cellInfo: companion.CellInfo): Component
+    def componentFor(owner: Owner, value: A, cellInfo: CellInfo): Component
     
     def cellEditable       : Boolean  = peer.isCellEditable(null)
     def shouldSelectCell   : Boolean  = peer.shouldSelectCell(null)

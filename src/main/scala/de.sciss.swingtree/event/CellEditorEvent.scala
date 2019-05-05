@@ -1,7 +1,7 @@
 package de.sciss.swingtree
 package event
 
-import swing.event.Event
+import scala.swing.event.Event
 
 sealed trait CellEditorEvent[+A] extends Event {
   def source: CellEditor[A]

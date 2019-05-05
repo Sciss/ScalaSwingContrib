@@ -1,8 +1,9 @@
 package de.sciss.swingtree
 
-import scala.swing.{Label, Component, Publisher}
 import javax.{swing => js}
+
 import scala.language.higherKinds
+import scala.swing.{Component, Label, Publisher}
 
 /** Describes the structure of a component's companion object where pluggable cell renderers must be supported.
   * @author Ken Scambler
@@ -17,18 +18,18 @@ trait RenderableCellsCompanion {
     * specific renderer for a type, this renderer falls back to a renderer
     * that renders the string returned from an item's <code>toString</code>.
     */
-  implicit val GenericRenderer: Renderer[Any] = Renderer.default
+  implicit val GenericRenderer: Renderer[Any] = Renderer.default  // IntelliJ highlight bug
 
   /** A default renderer implementation based on a Label. */
   type DefaultRenderer[-A] <: Label with Renderer[A]
   
-  
   trait CellRendererCompanion {
     type Peer // eg. javax.swing.table.TableCellRenderer, javax.swing.tree.TreeCellRenderer
-    type CellInfo
-    
+
     val emptyCellInfo: CellInfo
+
     def wrap[A](r: Peer): Renderer[A]
+
     def apply[A, B: Renderer](f: A => B): Renderer[A]
 
     def default[A]: DefaultRenderer[A]
@@ -40,7 +41,7 @@ trait RenderableCellsCompanion {
       this: DefaultRenderer[A] =>
       val convert: A => (js.Icon, String)
       
-      override abstract def componentFor(owner: Owner, a: A, info: companion.CellInfo): Component = {
+      override abstract def componentFor(owner: Owner, a: A, info: CellInfo): Component = {
         val c = super.componentFor(owner, a, info)
         val (labelIcon, labelText) = convert(a)
         icon = labelIcon
@@ -52,8 +53,10 @@ trait RenderableCellsCompanion {
 
   trait CellRenderer[-A] extends Publisher  {
     val companion: CellRendererCompanion
+
     def peer: companion.Peer
-    def componentFor(owner: Owner, value: A, cellInfo: companion.CellInfo): Component
+
+    def componentFor(owner: Owner, value: A, cellInfo: CellInfo): Component
   }
 }
 

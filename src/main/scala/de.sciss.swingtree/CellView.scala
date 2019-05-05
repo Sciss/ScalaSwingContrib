@@ -1,7 +1,7 @@
 package de.sciss.swingtree
 
-import scala.swing.{Component, Publisher}
-import scala.collection.mutable
+import scala.swing.{Component, Publisher, SetWrapper}
+import scala.collection.{Seq => CSeq}
 
 /** Describes components that have a concept of a "cell", each of which contains a value, may be selected,
   * and may support pluggable Renderers and Editors.
@@ -22,15 +22,17 @@ trait CellView[+A] {
     /** Allows querying and modification of the current selection state, for some unique coordinate S.
       * There may be more than one selection set supporting different coordinates, such as rows and columns.
       */
-    protected abstract class SelectionSet[S](a: => Seq[S]) extends mutable.Set[S] { 
-      def -=(s: S): this.type 
-      def +=(s: S): this.type
-      def --=(ss: Seq[S]): this.type 
-      def ++=(ss: Seq[S]): this.type
+    protected abstract class SelectionSet[S](a: => CSeq[S]) extends SetWrapper[S] {
+      def --=(ss: CSeq[S]): this.type
+      def ++=(ss: CSeq[S]): this.type
+
       override def size: Int = nonNullOrEmpty(a).length
-      def contains(s: S): Boolean = nonNullOrEmpty(a) contains s
+
+      def contains(s: S): Boolean = nonNullOrEmpty(a).contains(s)
+
       def iterator: Iterator[S] = nonNullOrEmpty(a).iterator
-      protected def nonNullOrEmpty[A1](s: Seq[A1]): Seq[A1] = if (s != null) s else Seq.empty
+
+      protected def nonNullOrEmpty[A1](s: CSeq[A1]): CSeq[A1] = if (s != null) s else CSeq.empty
     }
     
     /** Returns an iterator that traverses the currently selected cell values. */

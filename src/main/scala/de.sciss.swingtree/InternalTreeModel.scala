@@ -1,25 +1,26 @@
 package de.sciss.swingtree
 
+import de.sciss.swingtree.InternalTreeModel.{PeerModel, PeerNode}
+import de.sciss.swingtree.Tree.Path
+import de.sciss.swingtree.TreeModel.hiddenRoot
 import javax.swing.{tree => jst}
-import Tree.Path
-import TreeModel.hiddenRoot
-import scala.collection.JavaConversions.enumerationAsScalaIterator
-import InternalTreeModel.{PeerModel, PeerNode}
-import scala.collection.breakOut
+
+import scala.collection.JavaConverters.enumerationAsScalaIteratorConverter
+import scala.collection.{Seq => CSeq}
 
 object InternalTreeModel {
   
   def empty[A] = new InternalTreeModel[A](new PeerModel(new jst.DefaultMutableTreeNode(hiddenRoot)))
   
-  def apply[A](roots: A*)(children: A => Seq[A]): InternalTreeModel[A] = {
+  def apply[A](roots: A*)(children: A => CSeq[A]): InternalTreeModel[A] = {
     def createNode(a: A): PeerNode = {
       val node = new PeerNode(a)
-      children(a) map createNode foreach node.add
+      children(a).iterator.map(createNode).foreach(node.add)
       node
     }
     
     val rootNode = new PeerNode(hiddenRoot)
-    roots map createNode foreach rootNode.add
+    roots.iterator.map(createNode).foreach(rootNode.add)
     
     new InternalTreeModel(new PeerModel(rootNode))
   }
@@ -48,7 +49,18 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
 
   def treePathToPath(tp: jst.TreePath): Path[A] = {
     if (tp == null) null 
-    else ((tp.getPath map unpackNode)(breakOut): Path[A]).tail
+    else {
+      val b = Path.newBuilder[A]
+      val p = tp.getPath
+      b.sizeHint(p.length)
+      var i = 1
+      while (i < p.length) {
+        val n = unpackNode(p(i))
+        b += n
+        i += 1
+      }
+      b.result()
+    }
   } 
   
   private def rootPeerNode = peer.getRoot.asInstanceOf[PeerNode]
@@ -91,7 +103,10 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
     new jst.DefaultTreeModel(rootNode)
   }
   
-  private def getNodeChildren(node: PeerNode): Seq[PeerNode] = node.children.toSeq.asInstanceOf[Seq[PeerNode]]
+  private def getNodeChildren(node: PeerNode): Seq[PeerNode] = {
+    val sq: Seq[Any] = node.children.asScala.toSeq
+    sq.asInstanceOf[Seq[PeerNode]]
+  }
   
   def getChildrenOf(parentPath: Path[A]): Seq[A] = {
     val lastNode = pathToTreePath(parentPath).getLastPathComponent.asInstanceOf[PeerNode]

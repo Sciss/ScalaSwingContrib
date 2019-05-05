@@ -1,7 +1,7 @@
 package de.sciss.swingtree
 package event
 
-import swing.event.{SelectionEvent, ComponentEvent}
+import scala.swing.event.{ComponentEvent, SelectionEvent}
 
 /** The common trait of all events dispatched by a [[de.sciss.swingtree.Tree]]. */
 sealed trait TreeEvent[A] extends ComponentEvent {

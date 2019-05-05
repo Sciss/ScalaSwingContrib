@@ -4,6 +4,8 @@ import javax.swing.{tree => jst}
 
 import de.sciss.swingtree.Tree.Path
 
+import scala.collection.{Seq => CSeq}
+
 object TreeModel {
 
   /** This value is the root node of every TreeModel's underlying javax.swing.tree.TreeModel.  As we wish to support multiple root
@@ -12,31 +14,40 @@ object TreeModel {
   private[swingtree] case object hiddenRoot
   
   def empty[A]: TreeModel[A] = new ExternalTreeModel[A](Seq.empty, _ => Seq.empty)
+
   def apply[A](roots: A*)(children: A => Seq[A]): TreeModel[A] = new ExternalTreeModel(roots, children)
 }
 
-
 trait TreeModel[A] {
   
-  def roots: Seq[A]
-  val peer: jst.TreeModel 
-  def getChildrenOf(parentPath: Path[A]): Seq[A]
-  def getChildPathsOf(parentPath: Path[A]): Seq[Path[A]] = getChildrenOf(parentPath).map(parentPath :+ _)
+  def roots: CSeq[A]
+
+  val peer: jst.TreeModel
+
+  def getChildrenOf  (parentPath: Path[A]): CSeq[A]
+  def getChildPathsOf(parentPath: Path[A]): CSeq[Path[A]] = getChildrenOf(parentPath).map(parentPath :+ _)
+
   def filter(p: A => Boolean): TreeModel[A]
+
   def map[B](f: A => B): TreeModel[B]
+
   def foreach[U](f: A => U): Unit = depthFirstIterator foreach f
+
   def isExternalModel: Boolean
+
   def toInternalModel: InternalTreeModel[A]
-  
-  
+
   def pathToTreePath(path: Path[A]): jst.TreePath
+
   def treePathToPath(tp: jst.TreePath): Path[A]
 
   /** Replace the item at the given path in the tree with a new value.
     * Events are fired as appropriate.
     */
   def update(path: Path[A], newValue: A): Unit
+
   def remove(pathToRemove: Path[A]): Boolean
+
   def insertUnder(parentPath: Path[A], newValue: A, index: Int): Boolean
   
   def insertBefore(path: Path[A], newValue: A): Boolean = {
@@ -55,7 +66,7 @@ trait TreeModel[A] {
     insertUnder(parentPath, newValue, index + 1)
   }
 
-  protected def siblingsUnder(parentPath: Path[A]): Seq[A] =
+  protected def siblingsUnder(parentPath: Path[A]): CSeq[A] =
     if (parentPath.isEmpty) roots
     else getChildrenOf(parentPath)
 
@@ -67,13 +78,16 @@ trait TreeModel[A] {
     protected var openNodes: Iterator[Path[A]] = roots.map(Path(_)).iterator
 
     def pushChildren(path: Path[A]): Unit
+
     def hasNext: Boolean = openNodes.nonEmpty
-    def next(): A = if (openNodes.hasNext) {
-      val path = openNodes.next()
-      pushChildren(path)
-      path.last
-    }
-    else throw new NoSuchElementException("No more items")
+
+    def next(): A =
+      if (openNodes.hasNext) {
+        val path = openNodes.next()
+        pushChildren(path)
+        path.last
+      }
+      else throw new NoSuchElementException("No more items")
   }
   
   def breadthFirstIterator: Iterator[A] = new TreeIterator {

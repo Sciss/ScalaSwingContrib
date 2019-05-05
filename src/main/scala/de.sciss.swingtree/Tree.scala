@@ -1,14 +1,15 @@
 package de.sciss.swingtree
 
 import java.{awt => jawt, util => ju}
-import javax.swing.tree.{DefaultTreeCellRenderer, TreeCellEditor}
+
+import de.sciss.swingtree.event.{TreeNodesChanged, TreeNodesInserted, TreeNodesRemoved, TreePathSelected, TreeStructureChanged}
+import javax.swing.tree.{DefaultTreeCellRenderer, TreeCellEditor, TreePath}
 import javax.swing.{Icon, JComponent, JTree, event => jse, tree => jst}
 import javax.{swing => js}
 
-import de.sciss.swingtree.event.{TreeNodesChanged, TreeNodesInserted, TreeNodesRemoved, TreePathSelected, TreeStructureChanged}
-
-import scala.collection.breakOut
-import scala.language.{implicitConversions, reflectiveCalls}
+import scala.collection.{Seq => CSeq}
+import scala.collection.immutable.{IndexedSeq => Vec}
+import scala.language.implicitConversions
 import scala.swing.{Color, Component, Label, Scrollable}
 
 sealed trait TreeEditors extends EditableCellsCompanion {
@@ -17,13 +18,11 @@ sealed trait TreeEditors extends EditableCellsCompanion {
   protected override type Owner = Tree[_]
 
   object Editor extends CellEditorCompanion {
-    // XXX TODO: 'the outer reference in this type test cannot be checked at run time'
-    final case class CellInfo(isSelected: Boolean = false, isExpanded: Boolean = false,
-                              isLeaf: Boolean = false, row: Int = 0)
+    type Info = CellInfo
 
     override val emptyCellInfo = CellInfo()
 
-    override type Peer = jst.TreeCellEditor
+    override final type Peer = jst.TreeCellEditor
   
     def wrap[A](e: jst.TreeCellEditor): Editor[A] = new Wrapped[A](e)
    
@@ -33,6 +32,7 @@ sealed trait TreeEditors extends EditableCellsCompanion {
         Component.wrap(peer.getTreeCellEditorComponent(tree.peer, a, cellInfo.isSelected, 
             cellInfo.isExpanded, cellInfo.isLeaf, cellInfo.row).asInstanceOf[js.JComponent])
       }
+
       def value: A = peer.getCellEditorValue.asInstanceOf[A]
     }
 
@@ -51,25 +51,29 @@ sealed trait TreeEditors extends EditableCellsCompanion {
       */
     def apply[A, B](toB: A => B, toA: B => A)(implicit editor: Editor[B]): Editor[A] = new Editor[A] {
     
-      override lazy val peer = new jst.TreeCellEditor {
+      override lazy val peer: jst.TreeCellEditor = new jst.TreeCellEditor {
 
         override def getTreeCellEditorComponent(tree: JTree, value: Any, isSelected: Boolean, 
                                                 isExpanded: Boolean, isLeaf: Boolean, row: Int): jawt.Component = {
           val treeWrapper = getTreeWrapper(tree)
-          val a = treeWrapper.model unpackNode value
+          val a = treeWrapper.model.unpackNode(value)
           editor.peer.getTreeCellEditorComponent(tree, toB(a), isSelected, isExpanded, isLeaf, row)
         }
-        def addCellEditorListener(cel: jse.CellEditorListener): Unit = editor.peer.addCellEditorListener(cel)
-        def cancelCellEditing(): Unit = editor.peer.cancelCellEditing()
-        def getCellEditorValue: AnyRef = toA(editor.peer.getCellEditorValue.asInstanceOf[B]).asInstanceOf[AnyRef]
-        def isCellEditable(e: ju.EventObject): Boolean = editor.peer.isCellEditable(e)
+
+        def addCellEditorListener   (cel: jse.CellEditorListener): Unit = editor.peer.addCellEditorListener(cel)
         def removeCellEditorListener(cel: jse.CellEditorListener): Unit = editor.peer.removeCellEditorListener(cel)
+
+        def cancelCellEditing (): Unit    = editor.peer.cancelCellEditing()
+        def stopCellEditing   (): Boolean = editor.peer.stopCellEditing()
+
+        def getCellEditorValue: AnyRef = toA(editor.peer.getCellEditorValue.asInstanceOf[B]).asInstanceOf[AnyRef]
+
+        def isCellEditable  (e: ju.EventObject): Boolean = editor.peer.isCellEditable(e)
         def shouldSelectCell(e: ju.EventObject): Boolean = editor.peer.shouldSelectCell(e)
-        def stopCellEditing(): Boolean = editor.peer.stopCellEditing()
       }
       
       listenToPeer(this.peer)
-      
+
       override def componentFor(tree: Tree[_], a: A, info: CellInfo): Component = {
         editor.componentFor(tree, toB(a), info)
       }
@@ -82,8 +86,8 @@ sealed trait TreeEditors extends EditableCellsCompanion {
     * @see javax.swing.tree.TreeCellEditor
     */
   abstract class Editor[A] extends CellEditor[A] {
-    import Editor._
-    val companion = Editor
+
+    val companion: Editor.type = Editor
     
     protected[swingtree] def getTreeWrapper(peerTree: JTree): Tree[A] = peerTree match {
       case t: JTreeMixin[A] => t.treeWrapper
@@ -95,17 +99,17 @@ sealed trait TreeEditors extends EditableCellsCompanion {
       override def getTreeCellEditorComponent(tree: JTree, value: Any, selected: Boolean, expanded: Boolean,
                                               leaf: Boolean, rowIndex: Int): JComponent = {
         val treeWrapper = getTreeWrapper(tree)
-        val a = treeWrapper.model unpackNode value
+        val a = treeWrapper.model.unpackNode(value)
         componentFor(treeWrapper, a,
           CellInfo(isSelected = selected, isExpanded = expanded, isLeaf = leaf, row = rowIndex)).peer
       }
     }
 
     private[this] lazy val lazyPeer: jst.TreeCellEditor = new TreeEditorPeer
+
     def peer: TreeCellEditor = lazyPeer // We can't use a lazy val directly, as Wrapped wouldn't be able to override with a non-lazy val.
   }
 }
-
 
 sealed trait TreeRenderers extends RenderableCellsCompanion {
   _: Tree.type =>
@@ -113,35 +117,31 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
   protected override type Owner = Tree[_]
   
   object Renderer extends CellRendererCompanion {
-      
-    final case class CellInfo(isSelected: Boolean = false, isExpanded: Boolean = false,
-                              isLeaf: Boolean = false, row: Int = 0, hasFocus: Boolean = false)
+    type Info = CellInfo
+
     override val emptyCellInfo = CellInfo()
     
     type Peer = jst.TreeCellRenderer
 
-            
     def wrap[A](r: Peer): Renderer[A] = new Wrapped[A](r)
    
     /** Wrapper for `javax.swing.tree.TreeCellRenderer` */
     class Wrapped[-A](override val peer: Peer) extends Renderer[A] {
-      override def componentFor(tree: Tree[_], value: A, info: CellInfo): Component = {
+      override def componentFor(tree: Tree[_], value: A, info: CellInfo): Component =
         Component.wrap(peer.getTreeCellRendererComponent(tree.peer, value, info.isSelected, 
             info.isExpanded, info.isLeaf, info.row, info.hasFocus).asInstanceOf[js.JComponent])
-      }
     }
 
-    def apply[A,B](f: A => B)(implicit renderer: Renderer[B]): Renderer[A] = new Renderer[A] {
-      def componentFor(tree: Tree[_], value: A, info: CellInfo): Component = {
+    def apply[A, B](f: A => B)(implicit renderer: Renderer[B]): Renderer[A] = new Renderer[A] {
+      def componentFor(tree: Tree[_], value: A, info: CellInfo): Component =
         renderer.componentFor(tree, f(value), info)
-      }
     }
     
     override def default[A] = new DefaultRenderer[A]
     
-    override def labeled[A](f: A => (Icon, String)) =
+    override def labeled[A](f: A => (Icon, String)): DefaultRenderer[A] =
       new DefaultRenderer[A] with LabelRenderer[A] {
-        val convert: (A) => (Icon, String) = f
+        val convert: A => (Icon, String) = f
       }
   }
 
@@ -151,37 +151,34 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
     */
   trait Renderer[-A] extends CellRenderer[A] {
     import Renderer._
-    val companion = Renderer
+    val companion: Renderer.type = Renderer
     
-    protected def dispatchToScalaRenderer(tree: JTree, value: AnyRef, selected: Boolean, expanded: Boolean, 
-                                       leaf: Boolean, rowIndex: Int, focus: Boolean): js.JComponent = {
-      
-      def treeWrapper = tree match {
-        case t: JTreeMixin[A] => t.treeWrapper
-        case _ => throw new IllegalArgumentException(
-          "This javax.swing.JTree does not mix in JTreeMixin, and so cannot be used by scala.swing.Tree#Renderer")
-      }
+    protected def dispatchToScalaRenderer(tree: JTree, value: AnyRef, selected: Boolean, expanded: Boolean,
+                                          leaf: Boolean, rowIndex: Int, focus: Boolean): js.JComponent =
       value match {
       
         // JTree's TreeModel property change will indirectly cause the Renderer 
         // to be activated on the root node, even if it is permanently hidden; since our underlying root node
         // is not a suitably-typed A, we need to intercept it and return a harmless component.
         case TreeModel.hiddenRoot => new js.JTextField
-        case _ => 
-          val a = treeWrapper.model unpackNode value
-          componentFor(treeWrapper, a, CellInfo(isSelected=selected, isExpanded=expanded, isLeaf=leaf, row=rowIndex, hasFocus=focus)).peer
+        case _ =>
+          val w = tree match {
+            case t: JTreeMixin[A] => t.treeWrapper
+            case _ => throw new IllegalArgumentException(
+              "This javax.swing.JTree does not mix in JTreeMixin, and so cannot be used by scala.swing.Tree#Renderer")
+          }
+          val a = w.model.unpackNode(value)
+          componentFor(w, a, CellInfo(isSelected = selected, isExpanded = expanded,
+            isLeaf = leaf, row = rowIndex, hasFocus = focus)).peer
       }
-    }
-    
-    /**
-    *  By default, the peer cell renderer defers to the user's implementation of componentFor(), although this can be 
-    * overridden with other TreeCellRenderer implementations.
-    */
+
+    /**  By default, the peer cell renderer defers to the user's implementation of componentFor(), although this can be
+      * overridden with other TreeCellRenderer implementations.
+      */
     def peer: Peer = new jst.TreeCellRenderer {
       override def getTreeCellRendererComponent(tree: JTree, value: AnyRef, isSelected: Boolean, isExpanded: Boolean, 
-                                       isLeaf: Boolean, row: Int, hasFocus: Boolean): js.JComponent = {
+                                       isLeaf: Boolean, row: Int, hasFocus: Boolean): js.JComponent =
         dispatchToScalaRenderer(tree, value, isSelected, isExpanded, isLeaf, row, hasFocus)
-      }
     }
   }
 
@@ -189,8 +186,7 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
     * can be overridden to provide additional configuration.
     */
   abstract class AbstractRenderer[-A, C <: Component](val component: C) extends Renderer[A] {
-    import Renderer._
-  
+
     // The renderer component is responsible for painting selection
     // backgrounds. Hence, make sure it is opaque to let it draw
     // the background.
@@ -205,25 +201,26 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
     /** Configures the component before returning it. */
     def componentFor(tree: Tree[_], value: A, info: CellInfo): Component = {
       preConfigure(tree, value, info)
-      configure(tree, value, info)
+      configure   (tree, value, info)
       component
     }
   }
 
   /** Default renderer for a tree, with many configurable settings. */
-  class DefaultRenderer[-A] extends Label with Renderer[A] { 
-    override lazy val peer = new jst.DefaultTreeCellRenderer with SuperMixin { peerThis =>
-      override def getTreeCellRendererComponent(tree: JTree, value: AnyRef, isSelected: Boolean, isExpanded: Boolean, 
-                                             isLeaf: Boolean, row: Int, hasFocus: Boolean): js.JComponent = {
+  class DefaultRenderer[-A] extends Label with Renderer[A] {
+    class Peer extends jst.DefaultTreeCellRenderer with SuperMixin { peerThis =>
+      override def getTreeCellRendererComponent(tree: JTree, value: AnyRef, isSelected: Boolean, isExpanded: Boolean,
+                                                isLeaf: Boolean, row: Int, hasFocus: Boolean): js.JComponent = {
         dispatchToScalaRenderer(tree, value, isSelected, isExpanded, isLeaf, row, hasFocus)
         peerThis
       }
 
-      // XXX TODO --- this method is not part of any defined type, should be removed
-      def defaultRendererComponent(tree: JTree, value: AnyRef, isSelected: Boolean, isExpanded: Boolean, 
-                                             isLeaf: Boolean, row: Int, hasFocus: Boolean): Unit =
+      def defaultRendererComponent(tree: JTree, value: AnyRef, isSelected: Boolean, isExpanded: Boolean,
+                                   isLeaf: Boolean, row: Int, hasFocus: Boolean): Unit =
         super.getTreeCellRendererComponent(tree, value, isSelected, isExpanded, isLeaf, row, hasFocus)
     }
+
+    override lazy val peer: Peer = new Peer
     
     def closedIcon       : Icon         = peer.getClosedIcon
     def closedIcon_=(icon: Icon): Unit  = peer.setClosedIcon(icon)
@@ -249,10 +246,12 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
     def textSelectionColor             : Color        = peer.getTextSelectionColor
     def textSelectionColor_=(c         : Color): Unit = peer.setTextSelectionColor(c)
 
-    override def componentFor(tree: Tree[_], value: A, info: Renderer.CellInfo): Component = {
+    override def componentFor(tree: Tree[_], value: A, info: CellInfo): Component = {
       // the "refined type" is not accepted in Scala 2.12!
-      // peer.defaultRendererComponent(tree.peer, value.asInstanceOf[AnyRef], info.isSelected, info.isExpanded, info.isLeaf, info.row, info.hasFocus)
-      peer.getTreeCellRendererComponent(tree.peer, value.asInstanceOf[AnyRef], info.isSelected, info.isExpanded, info.isLeaf, info.row, info.hasFocus)
+      peer.defaultRendererComponent    (tree.peer, value.asInstanceOf[AnyRef], info.isSelected,
+        info.isExpanded, info.isLeaf, info.row, info.hasFocus)
+//      peer.getTreeCellRendererComponent(tree.peer, value.asInstanceOf[AnyRef], info.isSelected,
+//        info.isExpanded, info.isLeaf, info.row, info.hasFocus)
       this
     }
   }
@@ -260,13 +259,13 @@ sealed trait TreeRenderers extends RenderableCellsCompanion {
 
 object Tree extends TreeRenderers with TreeEditors {
 
-  val Path = collection.immutable.IndexedSeq
-  type Path[+A] = collection.immutable.IndexedSeq[A]
+  val Path: Vec.type  = Vec
+  type Path[+A]       = Vec[A]
   
   /** The style of lines drawn between tree nodes. */
   object LineStyle extends Enumeration {
-    val Angled = Value("Angled")
-    val None   = Value("None"  )
+    val Angled: Value = Value("Angled")
+    val None  : Value = Value("None"  )
     
     // "Horizontal" is omitted; it does not display as expected, because of the hidden root; it only shows lines
     // for the top level.
@@ -274,9 +273,9 @@ object Tree extends TreeRenderers with TreeEditors {
   }
   
   object SelectionMode extends Enumeration {
-    val Contiguous    = Value(jst.TreeSelectionModel.CONTIGUOUS_TREE_SELECTION)
-    val Discontiguous = Value(jst.TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION)
-    val Single        = Value(jst.TreeSelectionModel.SINGLE_TREE_SELECTION)
+    val Contiguous   : Value = Value(jst.TreeSelectionModel.CONTIGUOUS_TREE_SELECTION   )
+    val Discontiguous: Value = Value(jst.TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION)
+    val Single       : Value = Value(jst.TreeSelectionModel.SINGLE_TREE_SELECTION       )
   }
 
   protected trait JTreeMixin[A] { def treeWrapper: Tree[A] }
@@ -286,7 +285,7 @@ object Tree extends TreeRenderers with TreeEditors {
   * lazy child expansion function that may or may not terminate in leaf nodes.
   *
   * The tree publishes structural events, such as nodes being added or removed, on its main publisher,
-  * whereas selection changes are published to the dedicated [[Tree# s e l e c t i o n]] object.
+  * whereas selection changes are published to the dedicated [[Tree#selection]] object.
   *
   * @see javax.swing.JTree
   */
@@ -299,7 +298,7 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
 
   import Tree._
 
-  override val companion = Tree
+  override val companion: Tree.type = Tree
 
   override lazy val peer: JTree = new JTree(model.peer) with JTreeMixin[A] {
     def treeWrapper: Tree[A] = thisTree
@@ -315,12 +314,12 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
   /** Implicitly converts Tree.Path[A] lists to TreePath objects understood by the underlying peer JTree.
     * In addition to the objects in the list, the JTree's hidden root node must be prepended.
     */
-  implicit def pathToTreePath(p: Path[A]): jst.TreePath = model pathToTreePath p
+  implicit def pathToTreePath(p: Path[A]): jst.TreePath = model.pathToTreePath(p)
 
   /** Implicitly converts javax.swing.tree.TreePath objects to Tree.Path[A] lists recognised in Scala Swing.
     * TreePaths will include the underlying JTree's hidden root node, which is omitted for Tree.Paths.
     */
-  implicit def treePathToPath(tp: jst.TreePath): Path[A] = model treePathToPath tp
+  implicit def treePathToPath(tp: jst.TreePath): Path[A] = model.treePathToPath(tp)
 
   /** Implicit method to produce a generic editor.
     * This lives in the Tree class rather than the companion object because it requires
@@ -328,17 +327,19 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
     */
   implicit def genericEditor[B]: Editor[B] = new Editor[B] {
     // Get the current renderer if it passes for a DefaultTreeCellRenderer, or create a new one otherwise.
-    def rendererIfDefault: DefaultTreeCellRenderer = if (renderer != null) {
-      renderer.peer match {
+    def rendererIfDefault: DefaultTreeCellRenderer =
+      if (renderer != null) renderer.peer match {
         case defRend: jst.DefaultTreeCellRenderer => defRend
         case _ => new jst.DefaultTreeCellRenderer
+      } else {
+        new jst.DefaultTreeCellRenderer
       }
-    } else new jst.DefaultTreeCellRenderer
     
     override lazy val peer: jst.TreeCellEditor = new jst.DefaultTreeCellEditor(thisTree.peer, rendererIfDefault) {
       listenToPeer(this)
     }
-    override def componentFor(tree: Tree[_], a: B, info: Editor.CellInfo): Component = {
+
+    override def componentFor(tree: Tree[_], a: B, info: CellInfo): Component = {
       val c = peer.getTreeCellEditorComponent(tree.peer, a, info.isSelected, info.isExpanded, 
           info.isLeaf, info.row)
           
@@ -350,6 +351,7 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
       jComp.add(c)
       Component.wrap(jComp) // Needs to wrap JComponent
     }
+
     def value: B = peer.getCellEditorValue.asInstanceOf[B]
   }
 
@@ -361,24 +363,39 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
   object selection extends CellSelection {
   
     object rows extends SelectionSet(peer.getSelectionRows) {
-      def -= (r :     Int ): this.type = { peer.removeSelectionRow(r); this }
-      def += (r :     Int ): this.type = { peer.addSelectionRow   (r); this }
-      def --=(rs: Seq[Int]): this.type = { peer.removeSelectionRows(rs.toArray); this }
-      def ++=(rs: Seq[Int]): this.type = { peer.addSelectionRows(   rs.toArray); this }
+
+      def subtractOne (r: Int): this.type = { peer.removeSelectionRow(r); this }
+      def addOne      (r: Int): this.type = { peer.addSelectionRow   (r); this }
+
+      def --=(rs: CSeq[Int]): this.type = { peer.removeSelectionRows(rs.toArray); this }
+      def ++=(rs: CSeq[Int]): this.type = { peer.addSelectionRows(   rs.toArray); this }
+
       def maxSelection : Int = peer.getMaxSelectionRow
       def minSelection : Int = peer.getMinSelectionRow
       def leadSelection: Int = peer.getLeadSelectionRow
     }
 
     object paths extends SelectionSet[Path[A]]({
-      val p = peer.getSelectionPaths
-      if (p == null) Seq.empty else p.map(treePathToPath)(breakOut)
+      val p: Array[TreePath] = peer.getSelectionPaths
+      if (p == null) Seq.empty else {
+        val b = Seq.newBuilder[Path[A]]
+        b.sizeHint(p.length)
+        var i = 0
+        while (i < p.length) {
+          val n: Path[A] = treePathToPath(p(i))
+          b += n
+          i += 1
+        }
+        b.result()
+      }
     }) {
-      def -= (p :     Path[A] ): this.type = { peer.removeSelectionPath(p); this }
-      def += (p :     Path[A] ): this.type = { peer.addSelectionPath   (p); this }
-      def --=(ps: Seq[Path[A]]): this.type = { peer.removeSelectionPaths(ps.map(pathToTreePath).toArray); this }
-      def ++=(ps: Seq[Path[A]]): this.type = { peer.addSelectionPaths   (ps.map(pathToTreePath).toArray); this }
-      def leadSelection: Option[Path[A]] = Option(peer.getLeadSelectionPath)
+      def subtractOne (p: Path[A]): this.type = { peer.removeSelectionPath(p); this }
+      def addOne      (p: Path[A]): this.type = { peer.addSelectionPath   (p); this }
+
+      def --=(ps: CSeq[Path[A]]): this.type = { peer.removeSelectionPaths(ps.map(pathToTreePath).toArray); this }
+      def ++=(ps: CSeq[Path[A]]): this.type = { peer.addSelectionPaths   (ps.map(pathToTreePath).toArray); this }
+
+      def leadSelection: Option[Path[A]] = Option(peer.getLeadSelectionPath: Path[A])
     }
 
     peer.getSelectionModel.addTreeSelectionListener(new jse.TreeSelectionListener {
@@ -386,8 +403,8 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
         val (pathsAdded, pathsRemoved) = e.getPaths.toList.partition(e.isAddedPath)
         
         publish(TreePathSelected(thisTree,
-          pathsAdded   map treePathToPath,
-          pathsRemoved map treePathToPath,
+          pathsAdded  .map(treePathToPath),
+          pathsRemoved.map(treePathToPath),
           Option(e.getNewLeadSelectionPath: Path[A]),
           Option(e.getOldLeadSelectionPath: Path[A])))
       }
@@ -396,16 +413,18 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
     def cellValues: Iterator[A] = paths.iterator.map(_.last)
     
     
-    def mode             = Tree.SelectionMode(peer.getSelectionModel.getSelectionMode)
+    def mode    : Tree.SelectionMode.Value        = Tree.SelectionMode(peer.getSelectionModel.getSelectionMode)
     def mode_=(m: Tree.SelectionMode.Value): Unit = peer.getSelectionModel.setSelectionMode(m.id)
+
     def selectedNode: Option[A] = Option(peer.getLastSelectedPathComponent.asInstanceOf[A])
-    def isEmpty: Boolean          = peer.isSelectionEmpty
-    def size   : Int = peer.getSelectionCount
+
+    def isEmpty: Boolean  = peer.isSelectionEmpty
+    def size   : Int      = peer.getSelectionCount
 
     def clear(): Unit = peer.clearSelection()
   }
   
-  protected val modelListener = new jse.TreeModelListener {
+  protected val modelListener: jse.TreeModelListener = new jse.TreeModelListener {
     override def treeStructureChanged(e: jse.TreeModelEvent): Unit =
       publish(TreeStructureChanged[A](Tree.this, e.getPath.asInstanceOf[Array[A]].toIndexedSeq, 
               e.getChildIndices.toList, e.getChildren.asInstanceOf[Array[A]].toList))
@@ -423,23 +442,36 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
               e.getChildIndices.toList, e.getChildren.asInstanceOf[Array[A]].toList))
   }
   
-  def isVisible( path: Path[A]): Boolean = peer isVisible  path
-  def expandPath(path: Path[A]): Unit = peer expandPath path
-  def expandRow( row: Int): Unit = peer expandRow row
+  def isVisible( path: Path[A]) : Boolean = peer.isVisible  (path)
 
-  /**
-   * Expands every row. Will not terminate if the tree is of infinite depth.
-   */
+  def expandPath(path: Path[A]) : Unit    = peer.expandPath (path)
+  def expandRow( row: Int)      : Unit    = peer.expandRow  (row)
+
+  /** Expands every row.
+    *
+    * '''Warning:''' Will not terminate if the tree is of infinite depth.
+    */
   def expandAll(): Unit = {
     var i = 0
     while (i < rowCount) {
       expandRow(i)
       i += 1
     }
-  } 
-  
-  def collapsePath(path: Path[A]): Unit = peer collapsePath path
-  def collapseRow(row: Int)      : Unit = peer collapseRow  row
+  }
+
+  /**
+    * Collapses all visible rows.
+    */
+  def collapseAll(): Unit = {
+    var i = rowCount
+    while (i > 0) {
+      i -= 1
+      collapseRow(i)
+    }
+  }
+
+  def collapsePath(path: Path[A]): Unit = peer.collapsePath(path)
+  def collapseRow(row: Int)      : Unit = peer.collapseRow (row)
 
   def model: TreeModel[A] = treeDataModel
   
@@ -454,15 +486,8 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
   
   override def cellValues: Iterator[A] = model.depthFirstIterator
   
-  /**
-   * Collapses all visible rows.
-   */
-  def collapseAll(): Unit = {
-    rowCount-1 to 0 by -1 foreach collapseRow
-  }
-  
-  def isExpanded( path: Path[A]): Boolean = peer isExpanded  path
-  def isCollapsed(path: Path[A]): Boolean = peer isCollapsed path
+  def isExpanded( path: Path[A]): Boolean = peer.isExpanded (path)
+  def isCollapsed(path: Path[A]): Boolean = peer.isCollapsed(path)
   
   def isEditing: Boolean = peer.isEditing
   
@@ -475,21 +500,22 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
     editable = true
   }
   
-  def renderer: Renderer[A] = Renderer.wrap(peer.getCellRenderer)
-  def renderer_=(r: Tree.Renderer[A]): Unit = peer.setCellRenderer(r.peer)
+  def renderer    : Renderer[A]         = Renderer.wrap(peer.getCellRenderer)
+  def renderer_=(r: Renderer[A]): Unit  = peer.setCellRenderer(r.peer)
   
-  def showsRootHandles: Boolean              = peer.getShowsRootHandles
-  def showsRootHandles_=(b: Boolean): Unit = peer.setShowsRootHandles(b)
+  def showsRootHandles    : Boolean         = peer.getShowsRootHandles
+  def showsRootHandles_=(b: Boolean): Unit  = peer.setShowsRootHandles(b)
   
   def startEditingAtPath(path: Path[A]): Unit = peer.startEditingAtPath(pathToTreePath(path))
 
-  def getRowForLocation(x: Int, y: Int): Int = peer.getRowForLocation(x, y)
-  def getRowForPath(path: Path[A]) : Int     = peer.getRowForPath(pathToTreePath(path))
-  def getClosestPathForLocation(x: Int, y: Int): Option[Path[A]] = Option(peer.getClosestPathForLocation(x, y))
-  def getClosestRowForLocation( x: Int, y: Int): Int      = peer.getClosestRowForLocation( x, y)
+  def getRowForLocation(x: Int, y: Int): Int  = peer.getRowForLocation(x, y)
+  def getRowForPath(path: Path[A])     : Int  = peer.getRowForPath(pathToTreePath(path))
+
+  def getClosestPathForLocation(x: Int, y: Int): Option[Path[A]]  = Option(peer.getClosestPathForLocation(x, y): Path[A])
+  def getClosestRowForLocation (x: Int, y: Int): Int              = peer.getClosestRowForLocation( x, y)
   
-  def lineStyle: Tree.LineStyle.Value = Tree.LineStyle withName peer.getClientProperty("JTree.lineStyle").toString
-  def lineStyle_=(style: Tree.LineStyle.Value): Unit = peer.putClientProperty("JTree.lineStyle", style.toString)
+  def lineStyle         : Tree.LineStyle.Value        = Tree.LineStyle.withName(peer.getClientProperty("JTree.lineStyle").toString)
+  def lineStyle_=(style : Tree.LineStyle.Value): Unit = peer.putClientProperty("JTree.lineStyle", style.toString)
 
   
   // Follows the naming convention of ListView.selectIndices()
@@ -497,19 +523,26 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
   def selectPaths(paths: Path[A]*)         : Unit = peer.setSelectionPaths(paths.map(pathToTreePath).toArray)
   def selectInterval(first: Int, last: Int): Unit = peer.setSelectionInterval(first, last)
   
-  def rowCount: Int    = peer.getRowCount
-  def rowHeight: Int   = peer.getRowHeight
+  def rowCount  : Int = peer.getRowCount
+  def rowHeight : Int = peer.getRowHeight
+
   def largeModel: Boolean  = peer.isLargeModel
+
   def scrollableTracksViewportHeight: Boolean = peer.getScrollableTracksViewportHeight
-  def expandsSelectedPaths          : Boolean     = peer.getExpandsSelectedPaths
-  def expandsSelectedPaths_=(b: Boolean): Unit = peer.setExpandsSelectedPaths(b)
-  def dragEnabled: Boolean               = peer.getDragEnabled
+
+  def expandsSelectedPaths    : Boolean         = peer.getExpandsSelectedPaths
+  def expandsSelectedPaths_=(b: Boolean): Unit  = peer.setExpandsSelectedPaths(b)
+
+  def dragEnabled    : Boolean        = peer.getDragEnabled
   def dragEnabled_=(b: Boolean): Unit = peer.setDragEnabled(b)
 
-  def visibleRowCount: Int         = peer.getVisibleRowCount
-  def visibleRowCount_=(rows: Int): Unit = peer.setVisibleRowCount(rows)
+  def visibleRowCount       : Int         = peer.getVisibleRowCount
+  def visibleRowCount_=(rows: Int): Unit  = peer.setVisibleRowCount(rows)
+
   def makeVisible(path: Path[A]): Unit = peer.makeVisible(pathToTreePath(path))
-  def cancelEditing()      : Unit = peer.cancelEditing()
-  def stopEditing(): Boolean     = peer.stopEditing()
-  def editingPath: Option[Path[A]] = Option(peer.getEditingPath)
+
+  def cancelEditing (): Unit    = peer.cancelEditing()
+  def stopEditing   (): Boolean = peer.stopEditing  ()
+
+  def editingPath: Option[Path[A]] = Option(peer.getEditingPath: Path[A])
 }

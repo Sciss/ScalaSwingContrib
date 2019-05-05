@@ -1,30 +1,33 @@
 package de.sciss.swingtree
 
-import Tree.Path
-import scala.collection.mutable
-import javax.swing.{tree => jst, event => jse}
+import de.sciss.swingtree.Tree.Path
+import javax.swing.{event => jse, tree => jst}
+
+import scala.collection.{Seq => CSeq}
+import scala.collection.immutable.{Seq => ISeq}
 
 object ExternalTreeModel {
   def empty[A]: ExternalTreeModel[A] = new ExternalTreeModel[A](Seq.empty, _ => Seq.empty)
-  def apply[A](roots: A*)(children: A => Seq[A]): ExternalTreeModel[A] =
-    new ExternalTreeModel(roots, children)
+  def apply[A](roots: A*)(children: A => CSeq[A]): ExternalTreeModel[A] =
+    new ExternalTreeModel[A](roots, children)
 }
 
 /** Represents tree data as a sequence of root nodes, and a function that can retrieve child nodes. */
-class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends TreeModel[A] {
+class ExternalTreeModel[A](rootItems: CSeq[A], children: A => CSeq[A]) extends TreeModel[A] {
   self =>
   
   import TreeModel._
   
-  private var rootsVar = List(rootItems: _*)
+  private var rootsVar = rootItems.toList
+
+  def roots: ISeq[A] = rootsVar
   
-  def roots: Seq[A] = rootsVar
-  
-  def getChildrenOf(parentPath: Path[A]): Seq[A] = if (parentPath.isEmpty) roots 
-                                                   else children(parentPath.last)
+  def getChildrenOf(parentPath: Path[A]): CSeq[A] =
+    if (parentPath.isEmpty) roots
+    else children(parentPath.last)
   
   def filter(p: A => Boolean): ExternalTreeModel[A] =
-    new ExternalTreeModel[A](roots filter p, a => children(a) filter p)
+    new ExternalTreeModel[A](roots.filter(p), a => children(a).filter(p))
 
   def toInternalModel: InternalTreeModel[A] = InternalTreeModel(roots: _*)(children)
   
@@ -37,10 +40,20 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
     new jst.TreePath(array)
   }
   
-  def treePathToPath(tp: jst.TreePath): Path[A] = {
+  def treePathToPath(tp: jst.TreePath): Path[A] =
     if (tp == null) null 
-    else tp.getPath.map(_.asInstanceOf[A]).tail.toIndexedSeq
-  }
+    else {
+      val p = tp.getPath
+      val b = Path.newBuilder[A]
+      b.sizeHint(p.length)
+      var i = 1
+      while (i < p.length) {
+        val n = p(i).asInstanceOf[A]
+        b += n
+        i += 1
+      }
+      b.result()
+    }
 
   /** A function to update a value in the model, at a given path.  By default this will throw an exception; to
     * make a TreeModel updatable, call makeUpdatable() to provide a new TreeModel with the specified update method.
@@ -70,26 +83,29 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
     * <p>
     * Calling update() on a model returned from makeUpdatable() will perform the update.
     */
-  def makeUpdatableWith(effectfulUpdate: (Path[A], A) => A): ExternalTreeModel[A] = new ExternalTreeModel(roots, children) {
-    override val updateFunc: (Path[A], A) => A            = effectfulUpdate
-    override val insertFunc: (Path[A], A, Int) => Boolean = self.insertFunc
-    override val removeFunc: (Path[A]) => Boolean         = self.removeFunc
-    this.peer copyListenersFrom self.peer
-  }
+  def makeUpdatableWith(effectfulUpdate: (Path[A], A) => A): ExternalTreeModel[A] =
+    new ExternalTreeModel(roots, children) {
+      override val updateFunc: (Path[A], A) => A            = effectfulUpdate
+      override val insertFunc: (Path[A], A, Int) => Boolean = self.insertFunc
+      override val removeFunc:  Path[A]          => Boolean = self.removeFunc
+      this.peer copyListenersFrom self.peer
+    }
 
-  def makeInsertableWith(effectfulInsert: (Path[A], A, Int) => Boolean): ExternalTreeModel[A] = new ExternalTreeModel(roots, children) {
-    override val updateFunc: (Path[A], A) => A            = self.updateFunc
-    override val insertFunc: (Path[A], A, Int) => Boolean = effectfulInsert
-    override val removeFunc: (Path[A]) => Boolean         = self.removeFunc
-    this.peer copyListenersFrom self.peer
-  }
+  def makeInsertableWith(effectfulInsert: (Path[A], A, Int) => Boolean): ExternalTreeModel[A] =
+    new ExternalTreeModel(roots, children) {
+      override val updateFunc: (Path[A], A) => A            = self.updateFunc
+      override val insertFunc: (Path[A], A, Int) => Boolean = effectfulInsert
+      override val removeFunc:  Path[A]          => Boolean = self.removeFunc
+      this.peer copyListenersFrom self.peer
+    }
   
-  def makeRemovableWith(effectfulRemove: Path[A] => Boolean): ExternalTreeModel[A] = new ExternalTreeModel(roots, children) {
-    override val updateFunc: (Path[A], A) => A            = self.updateFunc
-    override val insertFunc: (Path[A], A, Int) => Boolean = self.insertFunc
-    override val removeFunc: (Path[A]) => Boolean         = effectfulRemove
-    this.peer copyListenersFrom self.peer
-  }
+  def makeRemovableWith(effectfulRemove: Path[A] => Boolean): ExternalTreeModel[A] =
+    new ExternalTreeModel(roots, children) {
+      override val updateFunc: (Path[A], A) => A            = self.updateFunc
+      override val insertFunc: (Path[A], A, Int) => Boolean = self.insertFunc
+      override val removeFunc:  Path[A]          => Boolean = effectfulRemove
+      this.peer copyListenersFrom self.peer
+    }
 
   /** Replaces one value with another, mutating the underlying structure.
     * If a way to modify the external tree structure has not been provided with makeUpdatableWith(), then
@@ -164,9 +180,9 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
 
   
   class ExternalTreeModelPeer extends jst.TreeModel {
-    private val treeModelListenerList = mutable.ListBuffer[jse.TreeModelListener]()
+    private var treeModelListenerList = List.empty[jse.TreeModelListener]
 
-    def getChildrenOf(parent: Any): Seq[A] = parent match {
+    def getChildrenOf(parent: Any): CSeq[A] = parent match {
       case `hiddenRoot` => roots
       case a            => children(a.asInstanceOf[A])
     }
@@ -186,15 +202,15 @@ class ExternalTreeModel[A](rootItems: Seq[A], children: A => Seq[A]) extends Tre
     def isLeaf(node: Any): Boolean = getChildrenOf(node).isEmpty
 
     private[swingtree] def copyListenersFrom(otherPeer: ExternalTreeModel[A]#ExternalTreeModelPeer): Unit =
-      otherPeer.treeModelListeners foreach addTreeModelListener
+      otherPeer.treeModelListeners.foreach(addTreeModelListener)
 
-    def treeModelListeners: Seq[jse.TreeModelListener] = treeModelListenerList
-    
+    def treeModelListeners: ISeq[jse.TreeModelListener] = treeModelListenerList
+
     def addTreeModelListener(tml: jse.TreeModelListener): Unit =
-      treeModelListenerList += tml
+      treeModelListenerList ::= tml
 
     def removeTreeModelListener(tml: jse.TreeModelListener): Unit  =
-      treeModelListenerList -= tml
+      treeModelListenerList = treeModelListenerList.filterNot(_ == tml)
 
     def valueForPathChanged(path: jst.TreePath, newValue: Any): Unit =
       update(treePathToPath(path), newValue.asInstanceOf[A])
